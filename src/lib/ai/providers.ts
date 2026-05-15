@@ -68,7 +68,7 @@ async function generateWithCloudflare(prompt: string): Promise<string> {
     throw new Error("CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN is not set");
   }
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fast`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
