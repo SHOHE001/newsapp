@@ -17,7 +17,6 @@ export async function runIngest(): Promise<IngestResult> {
     await db
       .insert(sources)
       .values({
-        id: sql`gen_random_uuid()`,
         name: src.name,
         url: src.url,
         category: src.category,

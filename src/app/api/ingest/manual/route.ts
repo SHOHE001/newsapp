@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
     const result = await runIngest();
     return NextResponse.json(result);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("[ingest/manual] error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
