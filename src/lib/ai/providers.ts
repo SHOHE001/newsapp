@@ -77,7 +77,7 @@ async function generateWithCloudflare(prompt: string): Promise<string> {
     },
     body: JSON.stringify({
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 4096,
+      max_tokens: 8192,
     }),
   });
 
@@ -91,11 +91,12 @@ async function generateWithCloudflare(prompt: string): Promise<string> {
   const data = (await response.json()) as { result?: { response?: unknown } };
   const raw = data?.result?.response;
   if (typeof raw === "string") return raw;
-  // 一部モデルは { response: { content: "..." } } や配列で返す
   if (raw && typeof raw === "object") {
     const obj = raw as { content?: unknown; text?: unknown };
     if (typeof obj.content === "string") return obj.content;
     if (typeof obj.text === "string") return obj.text;
+    // 配列やオブジェクトを直接返してきた場合（response_format: json_schema 等）
+    return JSON.stringify(raw);
   }
   throw new Error(
     `Cloudflare Workers AI unexpected response shape: ${JSON.stringify(data).slice(0, 500)}`

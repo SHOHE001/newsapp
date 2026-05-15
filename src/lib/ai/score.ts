@@ -56,7 +56,7 @@ ${JSON.stringify(items, null, 2)}
 }
 
 export async function scoreAndFilter(articles: RawArticle[]): Promise<ScoredArticle[]> {
-  const batchSize = 20;
+  const batchSize = 10;
 
   // Build index map for offset calculation
   const batches = await batchProcess(
