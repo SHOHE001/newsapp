@@ -7,6 +7,8 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 function isRetryableError(error: unknown): boolean {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
+    // API key not configured — skip to next provider
+    if (msg.includes("is not set")) return true;
     // 429 Too Many Requests / quota exhausted
     if (msg.includes("429") || msg.includes("quota") || msg.includes("rate limit")) {
       return true;
