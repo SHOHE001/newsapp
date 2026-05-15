@@ -21,8 +21,8 @@ function verifyCronSecret(req: NextRequest): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // /api/cron/* — Bearer CRON_SECRET verification
-  if (pathname.startsWith("/api/cron/")) {
+  // /api/cron/* と /api/ingest/* — Bearer CRON_SECRET verification
+  if (pathname.startsWith("/api/cron/") || pathname.startsWith("/api/ingest/")) {
     if (verifyCronSecret(req)) {
       return NextResponse.next();
     }
