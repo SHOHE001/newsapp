@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "src/app/api/cron/ingest/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/digest/route.ts": { "maxDuration": 300 },
+    "src/app/api/ingest/manual/route.ts": { "maxDuration": 300 }
+  },
   "crons": [
     {
       "path": "/api/cron/ingest",
