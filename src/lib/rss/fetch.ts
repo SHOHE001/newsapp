@@ -11,6 +11,7 @@ export interface RawArticle {
 
 const ARXIV_BODY_TEXT_MAX_LENGTH = 4000;
 const FETCH_TIMEOUT_MS = 10000;
+const MAX_ITEMS_PER_FEED = 30;
 
 function isArxivSource(sourceId: string): boolean {
   return sourceId.startsWith("arxiv-");
@@ -40,7 +41,8 @@ export async function fetchFeed(source: RssSource): Promise<RawArticle[]> {
   const parser = new Parser({ timeout: FETCH_TIMEOUT_MS });
   try {
     const feed = await parser.parseURL(source.url);
-    return feed.items.map((item) => ({
+    // 各ソースから最新 MAX_ITEMS_PER_FEED 件のみ取得（OpenAI Blog 等が960件返す対策）
+    return feed.items.slice(0, MAX_ITEMS_PER_FEED).map((item) => ({
       sourceId: source.id,
       originalUrl: item.link ?? item.guid ?? "",
       originalTitle: item.title ?? "",
