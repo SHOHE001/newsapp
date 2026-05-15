@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 function isRetryableError(error: unknown): boolean {
