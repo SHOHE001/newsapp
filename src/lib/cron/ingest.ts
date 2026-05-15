@@ -39,8 +39,20 @@ export async function runIngest(): Promise<IngestResult> {
   // 2. フィード取得
   const rawArticles = await fetchAllFeeds();
 
-  // 3. スコアリング
-  const scored = await scoreAndFilter(rawArticles);
+  // 既存記事（AI処理済み）の URL セットを取得してスキップ
+  const existingRows = await db
+    .select({ originalUrl: articles.originalUrl })
+    .from(articles)
+    .where(sql`${articles.aiTitleJa} IS NOT NULL`);
+  const existingUrls = new Set(existingRows.map((r) => r.originalUrl));
+  const newArticles = rawArticles.filter((a) => !existingUrls.has(a.originalUrl));
+
+  if (newArticles.length === 0) {
+    return { ingested: 0, skipped: rawArticles.length };
+  }
+
+  // 3. スコアリング（新着分のみ）
+  const scored = await scoreAndFilter(newArticles);
 
   // 4. ノイズ除外
   const filtered = scored.filter((a) => !a.isNoise);
