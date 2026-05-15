@@ -75,7 +75,10 @@ async function generateWithCloudflare(prompt: string): Promise<string> {
       Authorization: `Bearer ${apiToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 4096,
+    }),
   });
 
   if (!response.ok) {
