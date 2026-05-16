@@ -2,6 +2,7 @@ import { db } from "@/lib/db/client";
 import { digests } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import ArticleList from "@/components/ArticleList";
+import { DigestCard } from "@/components/DigestCard";
 
 export const dynamic = "force-dynamic";
 
@@ -33,18 +34,7 @@ export default async function HomePage() {
       </header>
 
       {/* Digest banner */}
-      {digest && (
-        <section className="mx-auto max-w-lg px-3 pt-4">
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 dark:border-blue-900 dark:bg-blue-950/40">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-500">
-              {digest.date} のダイジェスト
-            </p>
-            <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {digest.markdown.replace(/^#+\s/gm, "").slice(0, 200)}…
-            </p>
-          </div>
-        </section>
-      )}
+      {digest && <DigestCard date={digest.date} markdown={digest.markdown} />}
 
       {/* Article list (Client Component) */}
       <ArticleList />
