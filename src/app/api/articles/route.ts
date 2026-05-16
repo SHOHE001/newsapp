@@ -3,7 +3,7 @@ import { db } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 import { articles, reads, bookmarks, sources } from "@/lib/db/schema";
-import { eq, and, isNull, isNotNull, desc, or, ilike } from "drizzle-orm";
+import { eq, and, isNull, desc, or, ilike } from "drizzle-orm";
 
 const PAGE_SIZE = 20;
 
@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
     // Build where conditions
     const conditions = [
       or(isNull(articles.isNoise), eq(articles.isNoise, false)),
-      isNotNull(articles.aiTitleJa),
     ];
 
     if (category && category !== "all") {
@@ -49,6 +48,7 @@ export async function GET(req: NextRequest) {
         id: articles.id,
         aiTitleJa: articles.aiTitleJa,
         aiSummaryJa: articles.aiSummaryJa,
+        originalTitle: articles.originalTitle,
         originalUrl: articles.originalUrl,
         publishedAt: articles.publishedAt,
         score: articles.score,

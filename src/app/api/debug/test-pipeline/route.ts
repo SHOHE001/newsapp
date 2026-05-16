@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchAllFeeds, fetchFeed } from "@/lib/rss/fetch";
 import { RSS_SOURCES } from "@/lib/rss/sources";
-import { scoreAndFilter } from "@/lib/ai/score";
+import { scoreAndCategorize } from "@/lib/scoring/rule-scorer";
 import { generateJSON } from "@/lib/ai/providers";
 
 export const dynamic = "force-dynamic";
@@ -45,21 +45,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ elapsedMs: Date.now() - start, result });
     }
 
-    if (stage === "ai5") {
-      // 5記事AI処理
+    if (stage === "rule5") {
+      // 5 記事をルールベースでスコアリング (AI 呼ばない)
       const src = RSS_SOURCES[0];
       const items = (await fetchFeed(src)).slice(0, 5);
       const start = Date.now();
-      const scored = await scoreAndFilter(items);
+      const scored = scoreAndCategorize(items);
       return NextResponse.json({
         elapsedMs: Date.now() - start,
         input: items.length,
         output: scored.length,
-        sample: scored.slice(0, 3).map((a) => ({ title: a.originalTitle, score: a.score, isNoise: a.isNoise })),
+        sample: scored.map((a) => ({
+          title: a.originalTitle,
+          score: a.score,
+          category: a.category,
+          keywords: a.keywords,
+        })),
       });
     }
 
-    return NextResponse.json({ error: "unknown stage", validStages: ["fetch1", "fetchAll", "ai1", "ai5"] }, { status: 400 });
+    return NextResponse.json({ error: "unknown stage", validStages: ["fetch1", "fetchAll", "ai1", "rule5"] }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message, stack: err instanceof Error ? err.stack : undefined }, { status: 500 });

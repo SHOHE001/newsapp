@@ -7,6 +7,7 @@ type Article = {
   id: string;
   aiTitleJa: string | null;
   aiSummaryJa: string | null;
+  originalTitle: string;
   originalUrl: string;
   publishedAt: string;
   score: number | null;
@@ -98,7 +99,7 @@ function ArticleCard({
                   : "text-zinc-900 dark:text-zinc-50"
               }`}
             >
-              {article.aiTitleJa ?? article.originalUrl}
+              {article.aiTitleJa ?? article.originalTitle}
             </h2>
             <ExternalLink
               size={12}

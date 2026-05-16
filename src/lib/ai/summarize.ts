@@ -1,4 +1,4 @@
-import { type ScoredArticle } from "@/lib/ai/score";
+import { type ScoredArticle } from "@/lib/scoring/rule-scorer";
 import { generateJSON } from "@/lib/ai/providers";
 import { batchProcess } from "@/lib/ai/batch";
 

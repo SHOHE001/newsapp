@@ -3,13 +3,19 @@ import { db } from "@/lib/db/client";
 import { articles, sources } from "@/lib/db/schema";
 import { fetchFeed } from "@/lib/rss/fetch";
 import { prefilter } from "@/lib/rss/prefilter";
-import { scoreAndFilter } from "@/lib/ai/score";
+import {
+  scoreAndCategorize,
+  selectTopForSummary,
+  type ScoredArticle,
+} from "@/lib/scoring/rule-scorer";
 import { summarize } from "@/lib/ai/summarize";
 import { RSS_SOURCES } from "@/lib/rss/sources";
 import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+const TOP_N_FOR_SUMMARY = 5;
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -31,7 +37,7 @@ export async function POST(req: NextRequest) {
   const src = RSS_SOURCES[index];
 
   try {
-    // 1. ソースをUPSERT (FKエラー対策)
+    // 1. ソースを UPSERT
     await db
       .insert(sources)
       .values({ name: src.name, url: src.url, category: src.category })
@@ -50,14 +56,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Source not found in DB" }, { status: 500 });
     }
 
-    // 2. RSS取得
+    // 2. RSS 取得
     const rawArticles = await fetchFeed(src);
 
-    // 3. 既存記事スキップ
+    // 3. 既存記事を除外
     const existing = await db
       .select({ originalUrl: articles.originalUrl })
-      .from(articles)
-      .where(sql`${articles.aiTitleJa} IS NOT NULL`);
+      .from(articles);
     const existingUrls = new Set(existing.map((r) => r.originalUrl));
     const newArticles = rawArticles.filter((a) => !existingUrls.has(a.originalUrl));
 
@@ -68,7 +73,8 @@ export async function POST(req: NextRequest) {
         total: rawArticles.length,
         new: 0,
         ingested: 0,
-        message: "全件AI処理済み",
+        aiSummarized: 0,
+        message: "全件取込済み",
       });
     }
 
@@ -82,33 +88,46 @@ export async function POST(req: NextRequest) {
         new: newArticles.length,
         prefiltered: 0,
         ingested: 0,
+        aiSummarized: 0,
         message: "全件 prefilter で除外",
       });
     }
 
-    // 5. スコアリング
-    const scored = await scoreAndFilter(candidates);
-    const filtered = scored.filter((a) => !a.isNoise);
+    // 5. ルールベース・スコアリング
+    const scored = scoreAndCategorize(candidates);
+    const topForAi = selectTopForSummary(scored, TOP_N_FOR_SUMMARY);
+    const topUrls = new Set(topForAi.map((a) => a.originalUrl));
 
-    if (filtered.length === 0) {
-      return NextResponse.json({
-        source: src.name,
-        index,
-        total: rawArticles.length,
-        new: newArticles.length,
-        filtered: 0,
-        ingested: 0,
-        message: "全件ノイズと判定",
-      });
+    // 6. AI 要約（上位 N 件のみ。失敗時は空のまま続行）
+    let summarizedMap = new Map<string, { aiTitleJa: string; aiSummaryJa: string }>();
+    if (topForAi.length > 0) {
+      try {
+        const summarized = await summarize(topForAi);
+        summarizedMap = new Map(
+          summarized
+            .filter((a) => a.aiTitleJa || a.aiSummaryJa)
+            .map((a) => [
+              a.originalUrl,
+              { aiTitleJa: a.aiTitleJa, aiSummaryJa: a.aiSummaryJa },
+            ]),
+        );
+      } catch (err) {
+        console.warn(`[ingest/source] summarize failed for ${src.id}:`, err);
+      }
     }
 
-    // 5. 要約
-    const summarized = await summarize(filtered);
-
-    // 6. UPSERT
+    // 7. UPSERT
     let ingested = 0;
-    for (const article of summarized) {
+    let aiSummarized = 0;
+    for (const article of scored as ScoredArticle[]) {
       if (!article.originalUrl) continue;
+      const ai = topUrls.has(article.originalUrl)
+        ? summarizedMap.get(article.originalUrl)
+        : undefined;
+      const aiTitleJa = ai?.aiTitleJa || null;
+      const aiSummaryJa = ai?.aiSummaryJa || null;
+      if (aiTitleJa) aiSummarized++;
+
       await db
         .insert(articles)
         .values({
@@ -117,8 +136,8 @@ export async function POST(req: NextRequest) {
           originalTitle: article.originalTitle,
           publishedAt: article.publishedAt,
           bodyText: article.bodyText,
-          aiTitleJa: article.aiTitleJa || null,
-          aiSummaryJa: article.aiSummaryJa || null,
+          aiTitleJa,
+          aiSummaryJa,
           score: article.score,
           category: article.category,
           isNoise: article.isNoise,
@@ -127,8 +146,8 @@ export async function POST(req: NextRequest) {
         .onConflictDoUpdate({
           target: articles.originalUrl,
           set: {
-            aiTitleJa: article.aiTitleJa || null,
-            aiSummaryJa: article.aiSummaryJa || null,
+            aiTitleJa,
+            aiSummaryJa,
             score: article.score,
             category: article.category,
             isNoise: article.isNoise,
@@ -143,8 +162,10 @@ export async function POST(req: NextRequest) {
       index,
       total: rawArticles.length,
       new: newArticles.length,
-      filtered: filtered.length,
+      prefiltered: candidates.length,
+      topForAi: topForAi.length,
       ingested,
+      aiSummarized,
       nextIndex: index + 1 < RSS_SOURCES.length ? index + 1 : null,
     });
   } catch (err) {
