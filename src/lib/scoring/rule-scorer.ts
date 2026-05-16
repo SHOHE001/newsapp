@@ -8,25 +8,25 @@ export interface ScoredArticle extends RawArticle {
 }
 
 const SOURCE_BASE_SCORE: Record<string, number> = {
-  "anthropic-news": 85,
-  "openai-blog": 85,
-  "deepmind-blog": 85,
-  "google-research-blog": 80,
-  "arxiv-cs-ai": 75,
-  "arxiv-cs-cl": 75,
-  "arxiv-cs-lg": 75,
-  "mit-tech-review": 70,
-  "publickey": 70,
-  "ars-technica": 65,
-  "hacker-news": 65,
-  "the-verge": 60,
-  "zenn-trending": 60,
-  "qiita-trending": 55,
-  "itmedia-news": 55,
-  "hatena-it": 50,
+  "anthropic-news": 80,
+  "openai-blog": 80,
+  "deepmind-blog": 80,
+  "google-research-blog": 76,
+  "arxiv-cs-ai": 72,
+  "arxiv-cs-cl": 72,
+  "arxiv-cs-lg": 72,
+  "mit-tech-review": 68,
+  "publickey": 68,
+  "ars-technica": 64,
+  "hacker-news": 64,
+  "the-verge": 62,
+  "zenn-trending": 62,
+  "qiita-trending": 60,
+  "itmedia-news": 60,
+  "hatena-it": 60,
 };
 
-const DEFAULT_BASE_SCORE = 50;
+const DEFAULT_BASE_SCORE = 60;
 
 const SOURCE_CATEGORY: Record<string, string> = {
   "anthropic-news": "ai",
@@ -118,8 +118,9 @@ const HIGH_VALUE_KEYWORDS: Record<string, string[]> = {
   ],
 };
 
-const KEYWORD_BOOST_PER_HIT = 5;
-const MAX_SCORE = 100;
+const KEYWORD_BOOST_PER_HIT = 3;
+const MAX_KEYWORD_HITS_FOR_BOOST = 4;
+const MAX_SCORE = 95;
 const MAX_KEYWORDS = 5;
 
 function pickKeywords(haystack: string, haystackLower: string): string[] {
@@ -152,7 +153,8 @@ export function scoreOneArticle(article: RawArticle): {
   const haystack = `${article.originalTitle} ${article.bodyText.slice(0, 500)}`;
   const haystackLower = haystack.toLowerCase();
   const matchedKeywords = pickKeywords(haystack, haystackLower);
-  const boost = matchedKeywords.length * KEYWORD_BOOST_PER_HIT;
+  const effectiveHits = Math.min(matchedKeywords.length, MAX_KEYWORD_HITS_FOR_BOOST);
+  const boost = effectiveHits * KEYWORD_BOOST_PER_HIT;
   const score = Math.min(MAX_SCORE, baseScore + boost);
 
   return {
