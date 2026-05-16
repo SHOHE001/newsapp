@@ -1,6 +1,7 @@
 import { db } from "@/lib/db/client";
 import { articles, bookmarks, sources } from "@/lib/db/schema";
 import { fetchFeed } from "@/lib/rss/fetch";
+import { prefilter } from "@/lib/rss/prefilter";
 import { scoreAndFilter } from "@/lib/ai/score";
 import { summarize } from "@/lib/ai/summarize";
 import { RSS_SOURCES } from "@/lib/rss/sources";
@@ -38,7 +39,10 @@ async function ingestOneSource(
   const newArticles = rawArticles.filter((a) => !existingUrls.has(a.originalUrl));
   if (newArticles.length === 0) return 0;
 
-  const scored = await scoreAndFilter(newArticles);
+  const candidates = prefilter(newArticles);
+  if (candidates.length === 0) return 0;
+
+  const scored = await scoreAndFilter(candidates);
   const filtered = scored.filter((a) => !a.isNoise);
   if (filtered.length === 0) return 0;
 

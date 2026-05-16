@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { articles, sources } from "@/lib/db/schema";
 import { fetchFeed } from "@/lib/rss/fetch";
+import { prefilter } from "@/lib/rss/prefilter";
 import { scoreAndFilter } from "@/lib/ai/score";
 import { summarize } from "@/lib/ai/summarize";
 import { RSS_SOURCES } from "@/lib/rss/sources";
@@ -71,8 +72,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 4. スコアリング
-    const scored = await scoreAndFilter(newArticles);
+    // 4. 事前フィルタ（ルールベース）
+    const candidates = prefilter(newArticles);
+    if (candidates.length === 0) {
+      return NextResponse.json({
+        source: src.name,
+        index,
+        total: rawArticles.length,
+        new: newArticles.length,
+        prefiltered: 0,
+        ingested: 0,
+        message: "全件 prefilter で除外",
+      });
+    }
+
+    // 5. スコアリング
+    const scored = await scoreAndFilter(candidates);
     const filtered = scored.filter((a) => !a.isNoise);
 
     if (filtered.length === 0) {

@@ -61,7 +61,7 @@ ${JSON.stringify(items, null, 2)}
 }
 
 export async function summarize(articles: ScoredArticle[]): Promise<SummarizedArticle[]> {
-  const batchSize = 10;
+  const batchSize = 30;
 
   const batches = await batchProcess(
     articles,
