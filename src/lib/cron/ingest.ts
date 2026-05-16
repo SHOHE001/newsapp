@@ -6,10 +6,20 @@ import { summarize } from "@/lib/ai/summarize";
 import { RSS_SOURCES } from "@/lib/rss/sources";
 import { and, lt, notInArray, sql } from "drizzle-orm";
 
+export type IngestSourceStatus = "ok" | "empty" | "failed" | "missing-source-id";
+
+export interface IngestSourceDetail {
+  source: string;
+  status: IngestSourceStatus;
+  count: number;
+  error?: string;
+}
+
 export interface IngestResult {
   ingested: number;
   skipped: number;
   failed: number;
+  details: IngestSourceDetail[];
 }
 
 const SOURCE_DELAY_MS = 2000;
@@ -95,19 +105,28 @@ export async function runIngest(): Promise<IngestResult> {
   let ingested = 0;
   let failed = 0;
   let processed = 0;
+  const details: IngestSourceDetail[] = [];
 
   for (const src of RSS_SOURCES) {
     const dbSourceId = sourceUrlToId.get(src.url);
     if (!dbSourceId) {
       failed++;
+      details.push({ source: src.id, status: "missing-source-id", count: 0 });
       continue;
     }
     try {
       const count = await ingestOneSource(src, dbSourceId, existingUrls);
       ingested += count;
+      details.push({ source: src.id, status: count > 0 ? "ok" : "empty", count });
     } catch (err) {
       console.warn(`[ingest] source failed: ${src.id}`, err);
       failed++;
+      details.push({
+        source: src.id,
+        status: "failed",
+        count: 0,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     processed++;
     if (processed < RSS_SOURCES.length) {
@@ -122,5 +141,5 @@ export async function runIngest(): Promise<IngestResult> {
     .delete(articles)
     .where(and(lt(articles.publishedAt, thirtyDaysAgo), notInArray(articles.id, bookmarkedArticleIds)));
 
-  return { ingested, skipped: 0, failed };
+  return { ingested, skipped: 0, failed, details };
 }

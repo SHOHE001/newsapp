@@ -18,6 +18,7 @@ function PushNotificationManager() {
       "serviceWorker" in navigator &&
       "PushManager" in window
     ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(true);
       navigator.serviceWorker.ready.then((reg) => {
         reg.pushManager.getSubscription().then(setSubscription);
@@ -107,6 +108,7 @@ function InstallPrompt() {
 
   useEffect(() => {
     const ua = window.navigator.userAgent.toLowerCase();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsIos(/iphone|ipad|ipod/.test(ua));
     setIsStandalone(
       window.matchMedia("(display-mode: standalone)").matches
