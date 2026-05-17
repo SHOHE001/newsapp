@@ -12,14 +12,7 @@ const SOURCE_BASE_SCORE: Record<string, number> = {
   "openai-blog": 80,
   "deepmind-blog": 80,
   "google-research-blog": 76,
-  "arxiv-cs-ai": 72,
-  "arxiv-cs-cl": 72,
-  "arxiv-cs-lg": 72,
-  "mit-tech-review": 68,
   "publickey": 68,
-  "ars-technica": 64,
-  "hacker-news": 64,
-  "the-verge": 62,
   "zenn-trending": 62,
   "qiita-trending": 60,
   "itmedia-news": 60,
@@ -33,14 +26,7 @@ const SOURCE_CATEGORY: Record<string, string> = {
   "openai-blog": "ai",
   "deepmind-blog": "ai",
   "google-research-blog": "ai",
-  "arxiv-cs-ai": "ai",
-  "arxiv-cs-cl": "ai",
-  "arxiv-cs-lg": "ai",
-  "mit-tech-review": "foreign-tech",
   "publickey": "jp-it",
-  "ars-technica": "foreign-tech",
-  "hacker-news": "foreign-tech",
-  "the-verge": "foreign-tech",
   "zenn-trending": "jp-it",
   "qiita-trending": "jp-it",
   "itmedia-news": "jp-it",
@@ -167,11 +153,4 @@ export function scoreOneArticle(article: RawArticle): {
 
 export function scoreAndCategorize(articles: RawArticle[]): ScoredArticle[] {
   return articles.map((a) => ({ ...a, ...scoreOneArticle(a) }));
-}
-
-export function selectTopForSummary(
-  articles: ScoredArticle[],
-  n: number,
-): ScoredArticle[] {
-  return [...articles].sort((a, b) => b.score - a.score).slice(0, n);
 }

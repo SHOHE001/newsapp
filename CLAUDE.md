@@ -17,7 +17,7 @@ No test runner is configured.
 
 ## Architecture
 
-Personal news aggregator: pulls Japanese/foreign tech RSS feeds, runs each article through a **hybrid scoring pipeline** (rule-based prefilter + rule-based scoring → AI summary for the top few only), stores results in Postgres (Neon), and serves a PWA UI. A daily digest is generated from top-scored articles.
+Personal news aggregator: pulls 9 Japanese-IT + AI-vendor RSS feeds, scores each article with a **rule-based pipeline only** (prefilter + rule-based scoring — no LLM in the ingest path), stores results in Postgres (Neon), and serves a PWA UI. A daily digest is the **only** AI-generated content in the regular pipeline.
 
 ### Runtime stack
 
@@ -26,43 +26,49 @@ Personal news aggregator: pulls Japanese/foreign tech RSS feeds, runs each artic
 - **Tailwind v4** + shadcn (`components.json`)
 - **PWA** with custom service worker (`public/sw.js`), web-push for notifications
 
+### Sources (`src/lib/rss/sources.ts`)
+
+9 feeds total:
+- **日本IT (5)**: はてブIT / Publickey / ITmedia NEWS / Zenn Trending / Qiita Trending
+- **AI ベンダー一次情報 (4)**: Anthropic News / OpenAI Blog / DeepMind Blog / Google Research Blog
+
+英語ソース (Hacker News / The Verge / Ars Technica / MIT Tech Review / arXiv) は AI 要約廃止と同時に削除済み。AI ベンダー 4 件のみ英語のまま残し、読みたい記事だけ `/api/articles/[id]/translate` でタップ翻訳する運用。
+
 ### Ingest pipeline (`src/lib/cron/ingest.ts`)
 
-Designed to keep AI quota usage tiny and survive partial failures within Vercel's function timeout. Per source, **AI is called at most once** (for summary of top 5 articles); scoring/categorization is rule-based and free.
+No LLM call in the ingest path. 1 ソース ≈ 数秒で完走し、9 ソース全体でも 1 分以内。
 
-1. UPSERT all `RSS_SOURCES` (`src/lib/rss/sources.ts`) into the `sources` table.
-2. Load the set of already-ingested article URLs once (full `articles.original_url` set, not just AI-processed).
+1. UPSERT all `RSS_SOURCES` into the `sources` table.
+2. Load the set of already-ingested article URLs once (full `articles.original_url` set).
 3. For each source **sequentially** (with 2s `SOURCE_DELAY_MS` between sources):
    - `fetchFeed` — latest 30 items per feed (`src/lib/rss/fetch.ts`)
    - filter out URLs already in `existingUrls`
-   - `prefilter` (`src/lib/rss/prefilter.ts`) — drop articles whose title matches the JA/EN noise keyword list (芸能/スキャンダル/celebrity/gossip 等). Bypassed for high-signal sources (`arxiv-*`, `anthropic-news`, `openai-blog`, `deepmind-blog`, `google-research-blog`).
+   - `prefilter` (`src/lib/rss/prefilter.ts`) — drop articles whose title matches the JA noise keyword list (芸能/スキャンダル/結婚/不倫 等). Bypassed for AI vendor sources (`anthropic-news`, `openai-blog`, `deepmind-blog`, `google-research-blog`).
    - `scoreAndCategorize` (`src/lib/scoring/rule-scorer.ts`) — rule-based: source base score (60–80) + keyword boost (+3 per hit, max 4 hits, capped at 95). No LLM call.
-   - `selectTopForSummary(scored, 5)` — pick the 5 highest-scored articles for AI summary.
-   - `summarize` (`src/lib/ai/summarize.ts`) — single batched LLM call (batch size 30, but in practice ≤5 here) returns `aiTitleJa` + `aiSummaryJa`. **Failure is caught**; the source's articles are still saved without AI fields.
-   - UPSERT every scored article — top 5 with AI fields, the rest with `aiTitleJa = aiSummaryJa = null`. Per-source DB commit, so a later failure doesn't lose earlier sources' work.
+   - UPSERT every scored article — `aiTitleJa = aiSummaryJa = null` で常に保存。Per-source DB commit, so a later failure doesn't lose earlier sources' work.
 4. Delete articles older than 30 days that are not bookmarked.
 
-Single-source variant: `POST /api/ingest/source?index=N` runs the same pipeline for just `RSS_SOURCES[N]` and returns counters (total / new / prefiltered / topForAi / ingested / aiSummarized). Used to debug or work around timeouts/rate limits one source at a time.
+Single-source variant: `POST /api/ingest/source?index=N` runs the same pipeline for just `RSS_SOURCES[N]` and returns counters (total / new / prefiltered / ingested). Used to debug or work around timeouts/rate limits one source at a time.
 
 ### Digest (`src/lib/ai/digest.ts`, `src/app/api/cron/digest/route.ts`)
 
-Selects the top **20** articles from the last **24h** with `score >= 50`, sorted by score descending, then asks the LLM to produce a Japanese Markdown summary ("今日のポイント" + "ハイライト" sections). UPSERTs into the `digests` table keyed by `date`.
+**唯一の AI 呼び出し**。Selects the top **20** articles from the last **24h** with `score >= 50`, sorted by score descending, then asks the LLM to produce a Japanese Markdown summary ("今日のポイント" + "ハイライト" sections). UPSERTs into the `digests` table keyed by `date`.
+
+`aiTitleJa` / `aiSummaryJa` は常に空文字なので、digest プロンプト内では `originalTitle` / `bodyText.slice(0, 200)` にフォールバックして英語のまま LLM に渡す。LLM 側で日本語に整理してくれる。
 
 ### Per-article translation
 
-`POST /api/articles/[id]/translate` (no Bearer needed — covered by Basic Auth) translates the article body to Japanese on demand and caches the result in `articles.body_translated_ja`. Subsequent calls return the cached value.
+`POST /api/articles/[id]/translate` (Basic Auth でカバーされる) translates the article body to Japanese on demand and caches the result in `articles.body_translated_ja`. Subsequent calls return the cached value. **英語ソース (AI ベンダー 4 件) を読むときの主な日本語化手段**。
 
 ### AI providers (`src/lib/ai/providers.ts`)
 
-`generateText` / `generateJSON` cascade through providers in order until one succeeds on retryable errors (429, 5xx, missing API key):
+ダイジェスト生成と on-demand 翻訳でのみ使われる。`generateText` / `generateJSON` cascade through providers in order until one succeeds on retryable errors (429, 5xx, missing API key):
 
 1. **Gemini** (`gemini-2.5-flash-lite`) — `GEMINI_API_KEY`
 2. **Groq** (`llama-3.3-70b-versatile`) — `GROQ_API_KEY`
 3. **Cloudflare Workers AI** (`@cf/meta/llama-3.1-8b-instruct-fast`) — `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (note: `.env.local.example` lists `CF_ACCOUNT_ID` / `CF_WORKERS_AI_TOKEN` — the code uses `CLOUDFLARE_*`)
 
-Non-retryable errors are rethrown. `generateJSON` strips markdown code fences before `JSON.parse`. Cloudflare responses are normalized — string, `{content}`, `{text}`, or a raw object/array (which gets `JSON.stringify`'d) are all handled.
-
-**Known quota constraints** (2026-05 時点): Gemini free tier 20 req/day, Groq 100k TPD, Cloudflare 10k Neurons/day. The hybrid-scoring design is sized to fit within these.
+**Known quota constraints** (2026-05 時点): Gemini free tier 20 req/day, Groq 100k TPD, Cloudflare 10k Neurons/day. ダイジェスト 1 日 1 回 + on-demand 翻訳のみなので、Gemini 無料枠で余裕で収まる。
 
 ### Auth (`src/middleware.ts`)
 
@@ -77,7 +83,7 @@ Non-retryable errors are rethrown. `generateJSON` strips markdown code fences be
 - `/api/cron/digest` — daily 21:00 UTC (JST 06:00), `maxDuration: 300`
 - `/api/ingest/manual` — no schedule here, but `maxDuration: 300`
 
-Supplementary GitHub Actions cron (`.github/workflows/cron-ingest.yml`) hits `/api/ingest/manual` at UTC 03:00 & 12:00 using `CRON_SECRET` + `APP_URL` secrets — three ingests/day total on Vercel Hobby.
+`.github/workflows/cron-ingest.yml` は現在 `workflow_dispatch` のみ (手動補助用)。9 ソースが 1 分以内で完走するため定期実行は Vercel cron 1 本で足りる。
 
 ### Database (`src/lib/db/`)
 
@@ -85,16 +91,16 @@ Supplementary GitHub Actions cron (`.github/workflows/cron-ingest.yml`) hits `/a
 - `schema.ts` — tables: `sources`, `articles`, `reads`, `bookmarks`, `digests`, `pushSubscriptions`.
 - `articles` columns of note:
   - `score`, `category`, `isNoise`, `keywords` — **set for every ingested article** by rule-based scoring (nullable in schema, but practically always populated post-ingest).
-  - `aiTitleJa`, `aiSummaryJa` — **null unless the article was in the per-source top 5** for AI summary. `null` here means "not picked for AI", not "not yet processed".
+  - `aiTitleJa`, `aiSummaryJa` — **常に null** (AI 要約廃止後)。スキーマは過去データ温存のため変更していない。UI は `aiTitleJa ?? originalTitle` でフォールバック。
   - `bodyTranslatedJa` — null until `/api/articles/[id]/translate` is called once.
 
 ### Debug endpoints (Bearer `CRON_SECRET`)
 
-- `GET /api/debug/stats` — row counts (`sources`, `articles`, `articlesWithAi`, `bookmarks`, `digests`) + 5 most recent articles.
+- `GET /api/debug/stats` — row counts (`sources`, `articles`, `articlesWithAi`, `bookmarks`, `digests`) + 5 most recent articles。`articlesWithAi` は過去データの残骸を示すレガシー指標。
 - `GET /api/debug/test-pipeline?stage=<name>` — run individual pipeline stages without writing to DB. Valid stages:
   - `fetch1` — fetch one feed (`RSS_SOURCES[0]`) and report count + first item.
   - `fetchAll` — fetch every feed, report total and per-source counts.
-  - `ai1` — fetch one feed and run a single-article AI scoring call (cost: 1 LLM request) — diagnostic only; production no longer uses LLM for scoring.
+  - `ai1` — fetch one feed and run a single-article AI scoring call (cost: 1 LLM request) — diagnostic only; not used in production.
   - `rule5` — run rule-based scoring on the first 5 items of one feed (no LLM).
 
 ## Environment variables

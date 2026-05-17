@@ -18,14 +18,13 @@ type Article = {
   sourceName: string | null;
 };
 
-type Tab = "all" | "ai" | "jp-it" | "foreign-tech";
+type Tab = "all" | "ai" | "jp-it";
 type Sort = "score" | "newest";
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "all", label: "全て" },
   { value: "ai", label: "AI" },
   { value: "jp-it", label: "日本IT" },
-  { value: "foreign-tech", label: "海外テック" },
 ];
 
 function formatDate(iso: string) {

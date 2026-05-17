@@ -1,10 +1,15 @@
-import { type SummarizedArticle } from "@/lib/ai/summarize";
+import type { ScoredArticle } from "@/lib/scoring/rule-scorer";
 import { generateText } from "@/lib/ai/providers";
 
 const TOP_ARTICLES_LIMIT = 20;
 const MIN_SCORE = 50;
 
-export async function generateDailyDigest(articles: SummarizedArticle[]): Promise<string> {
+export interface DigestArticle extends ScoredArticle {
+  aiTitleJa: string;
+  aiSummaryJa: string;
+}
+
+export async function generateDailyDigest(articles: DigestArticle[]): Promise<string> {
   const filtered = articles
     .filter((a) => !a.isNoise && a.score >= MIN_SCORE)
     .sort((a, b) => b.score - a.score)

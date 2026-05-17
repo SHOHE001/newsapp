@@ -1,4 +1,4 @@
-export type RssCategory = "jp-it" | "foreign-tech" | "ai";
+export type RssCategory = "jp-it" | "ai";
 
 export interface RssSource {
   id: string;
@@ -39,56 +39,7 @@ export const RSS_SOURCES: RssSource[] = [
     url: "https://qiita.com/popular-items/feed",
     category: "jp-it",
   },
-  // 海外テック
-  {
-    id: "hacker-news",
-    name: "Hacker News",
-    url: "https://hnrss.org/frontpage",
-    category: "foreign-tech",
-  },
-  {
-    id: "the-verge",
-    name: "The Verge",
-    url: "https://www.theverge.com/rss/index.xml",
-    category: "foreign-tech",
-  },
-  {
-    id: "ars-technica",
-    name: "Ars Technica",
-    url: "https://feeds.arstechnica.com/arstechnica/index",
-    category: "foreign-tech",
-  },
-  {
-    id: "mit-tech-review",
-    name: "MIT Tech Review",
-    url: "https://www.technologyreview.com/feed/",
-    category: "foreign-tech",
-  },
-  // AI特化
-  {
-    id: "arxiv-cs-ai",
-    name: "arXiv cs.AI",
-    url: "http://export.arxiv.org/rss/cs.AI",
-    category: "ai",
-  },
-  {
-    id: "arxiv-cs-cl",
-    name: "arXiv cs.CL",
-    url: "http://export.arxiv.org/rss/cs.CL",
-    category: "ai",
-  },
-  {
-    id: "arxiv-cs-lg",
-    name: "arXiv cs.LG",
-    url: "http://export.arxiv.org/rss/cs.LG",
-    category: "ai",
-  },
-  {
-    id: "google-research-blog",
-    name: "Google Research Blog",
-    url: "https://research.google/blog/rss/",
-    category: "ai",
-  },
+  // AI ベンダー一次情報 (英語のまま並ぶ。タップで /api/articles/[id]/translate で翻訳)
   {
     id: "anthropic-news",
     name: "Anthropic News",
@@ -105,6 +56,12 @@ export const RSS_SOURCES: RssSource[] = [
     id: "deepmind-blog",
     name: "DeepMind Blog",
     url: "https://deepmind.google/blog/rss.xml",
+    category: "ai",
+  },
+  {
+    id: "google-research-blog",
+    name: "Google Research Blog",
+    url: "https://research.google/blog/rss/",
     category: "ai",
   },
 ];

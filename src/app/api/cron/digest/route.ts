@@ -3,9 +3,8 @@ import { db } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 import { articles, digests } from "@/lib/db/schema";
-import { generateDailyDigest } from "@/lib/ai/digest";
+import { generateDailyDigest, type DigestArticle } from "@/lib/ai/digest";
 import { and, gte, desc, sql } from "drizzle-orm";
-import type { SummarizedArticle } from "@/lib/ai/summarize";
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -29,8 +28,8 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(articles.score))
       .limit(20);
 
-    // SummarizedArticle 形式に変換
-    const summarizedArticles: SummarizedArticle[] = rows.map((row) => ({
+    // DigestArticle 形式に変換 (aiTitle/aiSummary は AI 要約廃止以降は空文字)
+    const summarizedArticles: DigestArticle[] = rows.map((row) => ({
       sourceId: row.sourceId,
       originalUrl: row.originalUrl,
       originalTitle: row.originalTitle,

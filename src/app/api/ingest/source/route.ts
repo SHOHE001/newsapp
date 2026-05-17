@@ -3,19 +3,12 @@ import { db } from "@/lib/db/client";
 import { articles, sources } from "@/lib/db/schema";
 import { fetchFeed } from "@/lib/rss/fetch";
 import { prefilter } from "@/lib/rss/prefilter";
-import {
-  scoreAndCategorize,
-  selectTopForSummary,
-  type ScoredArticle,
-} from "@/lib/scoring/rule-scorer";
-import { summarize } from "@/lib/ai/summarize";
+import { scoreAndCategorize, type ScoredArticle } from "@/lib/scoring/rule-scorer";
 import { RSS_SOURCES } from "@/lib/rss/sources";
 import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
-
-const TOP_N_FOR_SUMMARY = 5;
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -73,12 +66,11 @@ export async function POST(req: NextRequest) {
         total: rawArticles.length,
         new: 0,
         ingested: 0,
-        aiSummarized: 0,
         message: "全件取込済み",
       });
     }
 
-    // 4. 事前フィルタ（ルールベース）
+    // 4. 事前フィルタ (ルールベース)
     const candidates = prefilter(newArticles);
     if (candidates.length === 0) {
       return NextResponse.json({
@@ -88,45 +80,17 @@ export async function POST(req: NextRequest) {
         new: newArticles.length,
         prefiltered: 0,
         ingested: 0,
-        aiSummarized: 0,
         message: "全件 prefilter で除外",
       });
     }
 
     // 5. ルールベース・スコアリング
     const scored = scoreAndCategorize(candidates);
-    const topForAi = selectTopForSummary(scored, TOP_N_FOR_SUMMARY);
-    const topUrls = new Set(topForAi.map((a) => a.originalUrl));
 
-    // 6. AI 要約（上位 N 件のみ。失敗時は空のまま続行）
-    let summarizedMap = new Map<string, { aiTitleJa: string; aiSummaryJa: string }>();
-    if (topForAi.length > 0) {
-      try {
-        const summarized = await summarize(topForAi);
-        summarizedMap = new Map(
-          summarized
-            .filter((a) => a.aiTitleJa || a.aiSummaryJa)
-            .map((a) => [
-              a.originalUrl,
-              { aiTitleJa: a.aiTitleJa, aiSummaryJa: a.aiSummaryJa },
-            ]),
-        );
-      } catch (err) {
-        console.warn(`[ingest/source] summarize failed for ${src.id}:`, err);
-      }
-    }
-
-    // 7. UPSERT
+    // 6. UPSERT (AI 要約はもう行わない)
     let ingested = 0;
-    let aiSummarized = 0;
     for (const article of scored as ScoredArticle[]) {
       if (!article.originalUrl) continue;
-      const ai = topUrls.has(article.originalUrl)
-        ? summarizedMap.get(article.originalUrl)
-        : undefined;
-      const aiTitleJa = ai?.aiTitleJa || null;
-      const aiSummaryJa = ai?.aiSummaryJa || null;
-      if (aiTitleJa) aiSummarized++;
 
       await db
         .insert(articles)
@@ -136,8 +100,8 @@ export async function POST(req: NextRequest) {
           originalTitle: article.originalTitle,
           publishedAt: article.publishedAt,
           bodyText: article.bodyText,
-          aiTitleJa,
-          aiSummaryJa,
+          aiTitleJa: null,
+          aiSummaryJa: null,
           score: article.score,
           category: article.category,
           isNoise: article.isNoise,
@@ -146,8 +110,6 @@ export async function POST(req: NextRequest) {
         .onConflictDoUpdate({
           target: articles.originalUrl,
           set: {
-            aiTitleJa,
-            aiSummaryJa,
             score: article.score,
             category: article.category,
             isNoise: article.isNoise,
@@ -163,9 +125,7 @@ export async function POST(req: NextRequest) {
       total: rawArticles.length,
       new: newArticles.length,
       prefiltered: candidates.length,
-      topForAi: topForAi.length,
       ingested,
-      aiSummarized,
       nextIndex: index + 1 < RSS_SOURCES.length ? index + 1 : null,
     });
   } catch (err) {

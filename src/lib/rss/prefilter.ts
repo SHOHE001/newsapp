@@ -35,19 +35,7 @@ const NOISE_KEYWORDS_JA = [
   "宝くじ",
 ];
 
-const NOISE_KEYWORDS_EN = [
-  "celebrity",
-  "celebrities",
-  "gossip",
-  "scandal",
-  "divorce",
-  "tabloid",
-  "horoscope",
-  "diet plan",
-  "weight loss",
-];
-
-const BYPASS_SOURCE_PREFIXES = ["arxiv-"];
+// AI ベンダー一次情報はノイズフィルタを通さない (英語ノイズではないため)
 const BYPASS_SOURCE_IDS = new Set([
   "google-research-blog",
   "anthropic-news",
@@ -56,18 +44,14 @@ const BYPASS_SOURCE_IDS = new Set([
 ]);
 
 function shouldBypass(sourceId: string): boolean {
-  if (BYPASS_SOURCE_IDS.has(sourceId)) return true;
-  return BYPASS_SOURCE_PREFIXES.some((p) => sourceId.startsWith(p));
+  return BYPASS_SOURCE_IDS.has(sourceId);
 }
 
 export function isNoiseByRule(article: RawArticle): boolean {
   if (shouldBypass(article.sourceId)) return false;
   const title = article.originalTitle;
   if (!title) return false;
-  if (NOISE_KEYWORDS_JA.some((kw) => title.includes(kw))) return true;
-  const titleLower = title.toLowerCase();
-  if (NOISE_KEYWORDS_EN.some((kw) => titleLower.includes(kw))) return true;
-  return false;
+  return NOISE_KEYWORDS_JA.some((kw) => title.includes(kw));
 }
 
 export function prefilter(articles: RawArticle[]): RawArticle[] {

@@ -7,6 +7,7 @@ type Article = {
   id: string;
   aiTitleJa: string | null;
   aiSummaryJa: string | null;
+  originalTitle: string;
   originalUrl: string;
   publishedAt: string;
   score: number | null;
@@ -34,7 +35,7 @@ function ArticleCard({ article }: { article: Article }) {
         className="group flex items-start gap-1"
       >
         <h2 className="flex-1 text-[15px] font-semibold leading-snug text-zinc-900 group-hover:underline dark:text-zinc-50">
-          {article.aiTitleJa ?? article.originalUrl}
+          {article.aiTitleJa ?? article.originalTitle}
         </h2>
         <ExternalLink
           size={12}
